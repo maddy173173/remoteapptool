@@ -1,4 +1,4 @@
-name: Simple Windows RDP (Pinggy Tunnel)
+name: Simple Windows RDP (Bore Tunnel)
 
 on:
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
 
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Start Pinggy TCP Tunnel
+      - name: Download & Start Bore Tunnel
         shell: pwsh
         run: |
           Write-Output ""
@@ -37,8 +37,17 @@ jobs:
           Write-Output "   PASSWORD : KingRDP2025!"
           Write-Output "======================================"
           Write-Output ""
-          Write-Output "Pinggy TCP tunnel starting..."
-          Write-Output "Look below for your connection address (tcp://...)"
-          Write-Output ""
+          
+          # Download bore CLI (Rust binary for Windows)
+          $BoreUrl = "https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest -Uri $BoreUrl -OutFile "bore.zip"
+          Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
+          
+          $BoreExe = "$PWD\bore.exe"
+          if (-not (Test-Path $BoreExe)) {
+            Write-Error "bore.exe not found!"
+            exit 1
+          }
 
-          ssh -o StrictHostKeyChecking=no -p 443 -R 0:localhost:3389 tcp@a.pinggy.io
+          Write-Output "Bore tunnel starting on port 3389..."
+          & $BoreExe local 3389 --to bore.pub
