@@ -1,4 +1,4 @@
-name: Simple Windows RDP (Ngrok Auto-Detect)
+name: Simple Windows RDP (Pinggy Tunnel)
 
 on:
   workflow_dispatch:
@@ -27,27 +27,9 @@ jobs:
 
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Download Ngrok, Detect Path & Start RDP Tunnel
+      - name: Start Pinggy TCP Tunnel
         shell: pwsh
         run: |
-          # Download ngrok
-          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip -Force
-
-          # Detect ngrok.exe path dynamically
-          $NgrokPath = Get-ChildItem -Path $PWD -Recurse -Filter ngrok.exe | Select-Object -First 1
-
-          if (-not $NgrokPath) {
-            Write-Error "ngrok.exe not found!"
-            exit 1
-          }
-
-          $NgrokExe = $NgrokPath.FullName
-          Write-Output "Ngrok detected at: $NgrokExe"
-
-          # Configure ngrok (INLINE TOKEN)
-          & $NgrokExe config add-authtoken 3HmjfuN5zI8Fkw8PjN7kQ0Qrp3p_428u2HFzc3w2LGZg5veEt
-
           Write-Output ""
           Write-Output "======================================"
           Write-Output "   ★ WINDOWS RDP READY ★"
@@ -55,9 +37,8 @@ jobs:
           Write-Output "   PASSWORD : KingRDP2025!"
           Write-Output "======================================"
           Write-Output ""
-          Write-Output "Ngrok TCP tunnel starting..."
-          Write-Output "Look below for: tcp://HOST:PORT"
+          Write-Output "Pinggy TCP tunnel starting..."
+          Write-Output "Look below for your connection address (tcp://...)"
           Write-Output ""
 
-          # Start RDP tunnel using detected path
-          & $NgrokExe tcp 3389
+          ssh -o StrictHostKeyChecking=no -p 443 -R 0:localhost:3389 tcp@a.pinggy.io
