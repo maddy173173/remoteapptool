@@ -1,4 +1,4 @@
-name: Simple Windows RDP (Bore Tunnel)
+name: Simple Windows RDP (Auto Fallback Tunnel)
 
 on:
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
 
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Download & Start Bore Tunnel
+      - name: Start Tunnel (Ngrok with Token & Fallback)
         shell: pwsh
         run: |
           Write-Output ""
@@ -37,17 +37,45 @@ jobs:
           Write-Output "   PASSWORD : KingRDP2025!"
           Write-Output "======================================"
           Write-Output ""
-          
-          # Download bore CLI (Rust binary for Windows)
-          $BoreUrl = "https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-pc-windows-msvc.zip"
-          Invoke-WebRequest -Uri $BoreUrl -OutFile "bore.zip"
-          Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
-          
-          $BoreExe = "$PWD\bore.exe"
-          if (-not (Test-Path $BoreExe)) {
-            Write-Error "bore.exe not found!"
-            exit 1
+
+          # Download ngrok
+          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+          Expand-Archive ngrok.zip -Force
+          $NgrokPath = Get-ChildItem -Path $PWD -Recurse -Filter ngrok.exe | Select-Object -First 1
+          $NgrokExe = $NgrokPath.FullName
+
+          # Configure new token
+          & $NgrokExe config add-authtoken 3Hmm1pXB75Hotl0aeik1KByAMaJ_5G53etrVy3zYopUgp4mQD
+
+          Write-Output "Starting Ngrok tunnel..."
+          Start-Process -FilePath $NgrokExe -ArgumentList "tcp 3389" -RedirectStandardOutput "ngrok.log" -RedirectStandardError "ngrok_err.log" -NoNewWindow
+          Start-Sleep -Seconds 6
+
+          $ngrokFailed = $false
+          if (Test-Path "ngrok_err.log") {
+            $err = Get-Content "ngrok_err.log" -Raw
+            if ($err -match "ERR_NGROK") {
+              Write-Output "Ngrok error detected: $err"
+              $ngrokFailed = $true
+            }
           }
 
-          Write-Output "Bore tunnel starting on port 3389..."
-          & $BoreExe local 3389 --to bore.pub
+          if ($ngrokFailed) {
+            Write-Output "Ngrok failed (credit limit or card required). Switching to Bore tunnel..."
+            $BoreUrl = "https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-pc-windows-msvc.zip"
+            Invoke-WebRequest -Uri $BoreUrl -OutFile "bore.zip"
+            Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
+            $BoreExe = "$PWD\bore.exe"
+
+            Start-Process -FilePath $BoreExe -ArgumentList "local 3389 --to bore.pub" -RedirectStandardOutput "bore.log" -RedirectStandardError "bore_err.log" -NoNewWindow
+            Start-Sleep -Seconds 5
+          }
+
+          Write-Output "Tunnel is running. Printing connection address..."
+          
+          # Monitor logs and stream to stdout
+          for ($i=0; $i -lt 300; $i++) {
+            if (Test-Path "ngrok.log") { Get-Content "ngrok.log" -ErrorAction SilentlyContinue }
+            if (Test-Path "bore.log") { Get-Content "bore.log" -ErrorAction SilentlyContinue }
+            Start-Sleep -Seconds 5
+          }
